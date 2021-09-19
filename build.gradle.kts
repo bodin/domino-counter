@@ -12,7 +12,7 @@ repositories {
 }
 
 application {
-    mainClass.set("com.bodins.WebCam")
+    mainClass.set("com.bodins.jfx.WebCam")
 }
 
 dependencies {
@@ -25,5 +25,5 @@ tasks.getByName<Test>("test") {
     useJUnitPlatform()
 }
 javafx {
-    modules("javafx.controls", "javafx.swing")
+    modules("javafx.controls", "javafx.swing", "javafx.fxml")
 }

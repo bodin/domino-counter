@@ -1,11 +1,13 @@
-package com.bodins;
+package com.bodins.jfx;
 
 import javafx.application.Application;
 import javafx.embed.swing.SwingFXUtils;
+import javafx.fxml.FXMLLoader;
 import javafx.scene.Group;
 import javafx.scene.Scene;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
+import javafx.scene.layout.BorderPane;
 import javafx.stage.Stage;
 import nu.pattern.OpenCV;
 import org.opencv.core.Mat;
@@ -22,14 +24,45 @@ public class WebCam extends Application {
 
     Mat matrix = null;
 
+    public static void main(String args[]) throws InterruptedException {
+        OpenCV.loadLocally();
+        launch(args);
+    }
     @Override
-    public void start(Stage stage) throws FileNotFoundException, IOException, InterruptedException {
+    public void start(Stage primaryStage) {
+        try {
+            // load the FXML resource
+            FXMLLoader loader = new FXMLLoader();
+            loader.setLocation(getClass().getClassLoader().getResource("jfx/FXHelloCV.fxml"));
+
+            // store the root element so that the controllers can use it
+            BorderPane rootElement = loader.load();
+            // create and style a scene
+            Scene scene = new Scene(rootElement, 800, 600);
+            scene.getStylesheets().add(getClass().getClassLoader().getResource("jfx/application.css").toExternalForm());
+            // create the stage with the given title and the previously created
+            // scene
+            primaryStage.setTitle("JavaFX meets OpenCV");
+            primaryStage.setScene(scene);
+            // show the GUI
+            primaryStage.show();
+
+            // set the proper behavior on closing the application
+            WebCamController controller = loader.getController();
+            primaryStage.setOnCloseRequest((e) -> controller.setClosed());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // NOT USED
+    private void start2(Stage stage) throws FileNotFoundException, IOException, InterruptedException {
         // Capturing the snapshot from the camera
         WebCam obj = new WebCam();
         WritableImage writableImage = obj.capureSnapShot();
 
         // Saving the image
-        obj.saveImage();
+        //obj.saveImage();
 
         // Setting the image view
         ImageView imageView = new ImageView(writableImage);
@@ -55,8 +88,9 @@ public class WebCam extends Application {
 
         // Displaying the contents of the stage
         stage.show();
+
     }
-    public WritableImage capureSnapShot() {
+    private WritableImage capureSnapShot() {
         WritableImage WritableImage = null;
 
         // Instantiating the VideoCapture class (camera:: 0)
@@ -95,9 +129,5 @@ public class WebCam extends Application {
 
         // Saving it again
         imageCodecs.imwrite(file, matrix);
-    }
-    public static void main(String args[]) throws InterruptedException {
-        OpenCV.loadLocally();
-        launch(args);
     }
 }
