@@ -29,7 +29,7 @@ public class DominoCounter {
     private static double[] WHITE_A = new double[]{255, 255, 255};
 
     private static final int CONFIG_WIDTH_SIZE = 1024;
-    private static final int CONFIG_BLUR_SIZE = 3;
+    private static final int CONFIG_BLUR_SIZE = 1;
 
     public AtomicInteger count = new AtomicInteger(1);
     public boolean audit = false;
@@ -55,22 +55,22 @@ public class DominoCounter {
 
     public Mat identify(String name, Mat image) {
         count.set(1);
-        saveImage(name, image, "original");
-
-        //Mat original_resized = resize(name, image, CONFIG_WIDTH_SIZE);
 
         Mat working = copy(image);
+        saveImage(name, working, "original");
+
+        //Mat original_resized = resize(name, image, CONFIG_WIDTH_SIZE);
+        balance_white(working);
+
         blur(name, working, CONFIG_BLUR_SIZE);
         grayscale1(name, working);
         Node<Shape> node = findCountours(name, working);
 
-        drawCountours(node, working);
-        saveImage(name, working, "final");
-        return working;
+        Mat drawTo = working;
 
-        //drawCountours(node, image);
-        //saveImage(name, image, "final");
-        //return image;
+        drawCountours(node, drawTo);
+        saveImage(name, drawTo, "final");
+        return drawTo;
     }
 
     private Mat copy(Mat image){
@@ -99,7 +99,7 @@ public class DominoCounter {
                 //color c = Y < 128 ? black : white
                 double lume = 0.2126*ps[2] + 0.7152*ps[1] + 0.0722*ps[0];
                 double average = (ps[0] + ps[1] + ps[2]) / 3 ;
-                if(lume < 175) {
+                if(average < 240) {
                     image.put(a, b, BLACK_A);
                 }else{
                     image.put(a, b, WHITE_A);
@@ -148,7 +148,9 @@ public class DominoCounter {
     }
 
     private Mat drawCountours(Node<Shape> node, Mat drawTo){
-        Imgproc.cvtColor(drawTo, drawTo, Imgproc.COLOR_GRAY2BGR);
+        if(drawTo.channels() <3) {
+            Imgproc.cvtColor(drawTo, drawTo, Imgproc.COLOR_GRAY2BGR);
+        }
         node.getChildren().stream().forEach(c -> draw(c, drawTo));
         return drawTo;
     }
@@ -207,5 +209,106 @@ public class DominoCounter {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    //https://gist.github.com/tomykaira/94472e9f4921ec2cf582
+    // reference http://www.ipol.im/pub/art/2011/llmps-scb/
+    void balance_white(Mat mat) {
+
+        double discard_ratio = 0.05;
+        int hists[][] = new int[3][256];
+
+        for (int y = 0; y < mat.rows(); y++) {
+            for (int x = 0; x < mat.cols(); x++) {
+                double [] ptr = mat.get(y,x);
+                for (int j = 0; j < 3; ++j) {
+                    hists[j][(int)ptr[j]] += 1;
+                }
+            }
+        }
+
+        // cumulative hist
+        int total = mat.cols()*mat.rows();
+        int[] vmin = new int[3], vmax = new int[3];
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 255; j++) {
+                hists[i][j + 1] += hists[i][j];
+            }
+
+            vmin[i] = 0;
+            vmax[i] = 255;
+            while (hists[i][vmin[i]] < discard_ratio * total) {
+                vmin[i] += 1;
+            }
+            while (hists[i][vmax[i]] > (1 - discard_ratio) * total){
+                vmax[i] -= 1;
+            }
+
+            if (vmax[i] < 255 - 1) {
+                vmax[i] += 1;
+            }
+        }
+
+        for (int y = 0; y < mat.rows(); y++) {
+            for (int x = 0; x < mat.cols(); x++) {
+                double [] ptr = mat.get(y,x);
+                for (int j = 0; j < 3; j++) {
+                    int val = (int)ptr[j];
+                    if (val < vmin[j])
+                        val = vmin[j];
+                    if (val > vmax[j])
+                        val = vmax[j];
+                    ptr[j] = ((val - vmin[j]) * 255.0 / (vmax[j] - vmin[j]));
+                }
+                mat.put(y,x,ptr);
+            }
+        }
+/*
+  double discard_ratio = 0.05;
+  int hists[3][256];
+  memset(hists, 0, 3*256*sizeof(int));
+
+  for (int y = 0; y < mat.rows; ++y) {
+    //row
+    uchar* ptr = mat.ptr<uchar>(y);
+    for (int x = 0; x < mat.cols; ++x) {
+      for (int j = 0; j < 3; ++j) {
+        hists[j][ptr[x * 3 + j]] += 1;
+      }
+    }
+  }
+        // cumulative hist
+        int total = mat.cols*mat.rows;
+        int vmin[3], vmax[3];
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 255; ++j) {
+                hists[i][j + 1] += hists[i][j];
+            }
+            vmin[i] = 0;
+            vmax[i] = 255;
+            while (hists[i][vmin[i]] < discard_ratio * total)
+                vmin[i] += 1;
+            while (hists[i][vmax[i]] > (1 - discard_ratio) * total)
+                vmax[i] -= 1;
+            if (vmax[i] < 255 - 1)
+                vmax[i] += 1;
+        }
+
+
+        for (int y = 0; y < mat.rows; ++y) {
+            uchar* ptr = mat.ptr<uchar>(y);
+            for (int x = 0; x < mat.cols; ++x) {
+                for (int j = 0; j < 3; ++j) {
+                    int val = ptr[x * 3 + j];
+                    if (val < vmin[j])
+                        val = vmin[j];
+                    if (val > vmax[j])
+                        val = vmax[j];
+                    ptr[x * 3 + j] = static_cast<uchar>((val - vmin[j]) * 255.0 / (vmax[j] - vmin[j]));
+                }
+            }
+        }
+        */
+
     }
 }
