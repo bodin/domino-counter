@@ -17,8 +17,8 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-public class Main {
-    public static AtomicInteger count = new AtomicInteger(1);
+public class DominoCounter {
+
     private static Scalar RED = new Scalar(0, 0, 255);
     private static Scalar GREEN = new Scalar(0, 255, 0);
     private static Scalar BLUE = new Scalar(255, 0, 0);
@@ -31,48 +31,66 @@ public class Main {
     private static final int CONFIG_WIDTH_SIZE = 1024;
     private static final int CONFIG_BLUR_SIZE = 3;
 
+    public AtomicInteger count = new AtomicInteger(1);
+    public boolean audit = false;
+
     public static void main(String[] args){
         cleanOutput();
+        DominoCounter dc = new DominoCounter();
         OpenCV.loadLocally();
-        run("sample-normal");
-        run("sample-crowded");
-        run("sample-three");
-        run("sample-one");
+        dc.identify("sample-normal");
+        dc.identify("sample-crowded");
+        dc.identify("sample-three");
+        dc.identify("sample-one");
     }
 
-    public static void run(String name) {
-        count.set(1);
+    public Mat identify(Mat image) {
+        return this.identify("empty", image);
+    }
 
+    public Mat identify(String name) {
         Mat image = loadImage(name);
+        return this.identify(name, image);
+    }
+
+    public Mat identify(String name, Mat image) {
+        count.set(1);
         saveImage(name, image, "original");
 
-        Mat original_resized = resize(name, image, CONFIG_WIDTH_SIZE);
+        //Mat original_resized = resize(name, image, CONFIG_WIDTH_SIZE);
 
-        Mat working = copy(original_resized);
+        Mat working = copy(image);
         blur(name, working, CONFIG_BLUR_SIZE);
-        grayscale2(name, working);
-        drawCountours(name, working, original_resized);
+        grayscale1(name, working);
+        Node<Shape> node = findCountours(name, working);
 
-        saveImage(name, original_resized, "final");
+        drawCountours(node, working);
+        saveImage(name, working, "final");
+        return working;
+
+        //drawCountours(node, image);
+        //saveImage(name, image, "final");
+        //return image;
     }
-      private static Mat copy(Mat image){
-          Mat result = new Mat();
-          image.copyTo(result);
-          return result;
-      }
 
-    private static void blur(String name, Mat image, int size){
+    private Mat copy(Mat image){
+      Mat result = new Mat();
+      image.copyTo(result);
+      return result;
+    }
+
+    private void blur(String name, Mat image, int size){
         Imgproc.medianBlur(image, image, size);
         saveImage(name, image, "blur");
     }
-    private static void grayscale1(String name, Mat image){
+    private void grayscale1(String name, Mat image){
         Imgproc.cvtColor(image, image, Imgproc.COLOR_RGB2GRAY);
         //Imgproc.adaptiveThreshold(image, image, 255, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 7, 15);
         Imgproc.threshold(image, image, 0, 255, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU);
 
         saveImage(name, image, "gray");
     }
-    private static void grayscale2(String name, Mat image){
+    private void grayscale2(String name, Mat image){
         for (int a = 0; a < image.rows(); a++) {
             for(int b = 0; b < image.cols(); b++) {
                 double [] ps = image.get(a,b);
@@ -81,7 +99,7 @@ public class Main {
                 //color c = Y < 128 ? black : white
                 double lume = 0.2126*ps[2] + 0.7152*ps[1] + 0.0722*ps[0];
                 double average = (ps[0] + ps[1] + ps[2]) / 3 ;
-                if(average < 150) {
+                if(lume < 175) {
                     image.put(a, b, BLACK_A);
                 }else{
                     image.put(a, b, WHITE_A);
@@ -91,7 +109,7 @@ public class Main {
         Imgproc.cvtColor(image, image, Imgproc.COLOR_RGB2GRAY);
         saveImage(name, image, "gray");
     }
-    private static Node<Shape> toNode(List<MatOfPoint> points, Mat hierarchy){
+    private Node<Shape> toNode(List<MatOfPoint> points, Mat hierarchy){
         Node node = new Node(Path.of("."));
         for(int i = 0; i < points.size(); i++) {
 
@@ -115,7 +133,8 @@ public class Main {
         }
         return node;
     }
-    private static void drawCountours(String name, Mat gray, Mat drawTo){
+
+    private Node<Shape> findCountours(String name, Mat gray){
         Mat edge = new Mat();
         Mat hierarchy = new Mat();
         List<MatOfPoint> points = new ArrayList<>();
@@ -125,10 +144,16 @@ public class Main {
 
         Imgproc.findContours(edge, points, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
 
-        Node<Shape> node = toNode(points, hierarchy);
-        node.getChildren().stream().forEach(c -> draw(c, drawTo));
+        return toNode(points, hierarchy);
     }
-    private static void draw(Node<Shape> n, Mat drawTo){
+
+    private Mat drawCountours(Node<Shape> node, Mat drawTo){
+        Imgproc.cvtColor(drawTo, drawTo, Imgproc.COLOR_GRAY2BGR);
+        node.getChildren().stream().forEach(c -> draw(c, drawTo));
+        return drawTo;
+    }
+
+    private void draw(Node<Shape> n, Mat drawTo){
         Shape s = n.getData();
 
         if(!s.isImportant()) return;
@@ -141,7 +166,7 @@ public class Main {
         n.getChildren().stream().forEach(c -> draw(c, drawTo));
     }
 
-    private static Mat resize(String name, Mat image, double width){
+    private Mat resize(String name, Mat image, double width){
         Mat dest = new Mat();
         int scale_percent = (int)(100 * width / image.width());
         int new_width = image.width() * scale_percent / 100;
@@ -153,14 +178,16 @@ public class Main {
 
         return dest;
     }
-    private static Mat loadImage(String imagePath) {
+    private Mat loadImage(String imagePath) {
         Imgcodecs imageCodecs = new Imgcodecs();
         return imageCodecs.imread("src/main/resources/" + imagePath + ".jpg");
     }
 
-    private static void saveImage(String name, Mat imageMatrix, String suffix) {
-         Imgcodecs imgcodecs = new Imgcodecs();
-        imgcodecs.imwrite("build/images/" + name + "-" + count.getAndIncrement() + "-" + suffix + ".jpg", imageMatrix);
+    private void saveImage(String name, Mat imageMatrix, String suffix) {
+        if(audit) {
+            Imgcodecs imgcodecs = new Imgcodecs();
+            imgcodecs.imwrite("build/images/" + name + "-" + count.getAndIncrement() + "-" + suffix + ".jpg", imageMatrix);
+        }
     }
     private static void cleanOutput(){
         try {

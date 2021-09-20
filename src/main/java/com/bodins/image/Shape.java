@@ -34,7 +34,7 @@ public class Shape {
     }
 
     public boolean isCircle(){
-        return this.area / this.areaEncolsingCircle > .55;
+        return this.area / this.areaEncolsingCircle > .65;
     }
 
     public MatOfPoint getContour() {

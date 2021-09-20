@@ -4,6 +4,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.bodins.DominoCounter;
 import org.opencv.core.Mat;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.videoio.VideoCapture;
@@ -43,7 +44,7 @@ public class WebCamController
 	private VideoCapture capture = new VideoCapture();
 	private boolean cameraActive = false;
 	private static int cameraId = 0;
-
+	private DominoCounter counter = new DominoCounter();
 	@FXML
 	protected void startOrStopCamera(ActionEvent event) {
 		if (this.cameraActive)	{
@@ -52,11 +53,6 @@ public class WebCamController
 			this.startCamera();
 		}
 		this.cameraActive = !this.cameraActive;
-	}
-
-	@FXML
-	protected void analyze(ActionEvent event) {
-		System.out.println("Analyze");
 	}
 
 	private void startCamera(){
@@ -70,11 +66,12 @@ public class WebCamController
 			Runnable frameGrabber = () -> {
 				// effectively grab and process a single frame
 				Mat frame = grabFrame();
+				Mat marked = counter.identify(frame);
+
 				// convert and show the frame
-				Image imageToShow = Utils.mat2Image(frame);
+				Image imageToShow = Utils.mat2Image(marked);
 				updateImageView(currentFrame, imageToShow);
 			};
-
 
 			this.timer = Executors.newSingleThreadScheduledExecutor();
 			this.timer.scheduleAtFixedRate(frameGrabber, 0, 33, TimeUnit.MILLISECONDS);

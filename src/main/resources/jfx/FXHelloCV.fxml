@@ -13,7 +13,6 @@
                 <Insets bottom="25" left="25" right="25" top="25" />
             </padding>
             <Button fx:id="startStop" alignment="center" onAction="#startOrStopCamera" text="Start Camera" />
-            <Button fx:id="analyze" alignment="center" onAction="#analyze" text="Capture" />
         </HBox>
     </bottom>
     <center>
