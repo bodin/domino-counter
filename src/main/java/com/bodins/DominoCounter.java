@@ -19,8 +19,7 @@ import java.util.stream.Collectors;
 
 public class DominoCounter {
 
-    private static Scalar RED = new Scalar(0, 0, 255);
-    private static Scalar GREEN = new Scalar(0, 255, 0);
+
     private static Scalar BLUE = new Scalar(255, 0, 0);
     private static Scalar BLACK = new Scalar(255, 255, 255);
     private static Scalar WHITE = new Scalar(0, 0, 0);
@@ -36,12 +35,20 @@ public class DominoCounter {
 
     public static void main(String[] args){
         cleanOutput();
-        DominoCounter dc = new DominoCounter();
+        DominoCounter dc = new DominoCounter(true);
         OpenCV.loadLocally();
         dc.identify("sample-normal");
         dc.identify("sample-crowded");
         dc.identify("sample-three");
         dc.identify("sample-one");
+    }
+
+    public DominoCounter() {
+        this(false);
+    }
+
+    public DominoCounter(boolean audit) {
+        this.audit = audit;
     }
 
     public Mat identify(Mat image) {
@@ -63,7 +70,7 @@ public class DominoCounter {
         balance_white(working);
 
         blur(name, working, CONFIG_BLUR_SIZE);
-        grayscale1(name, working);
+        grayscale2(name, working);
         Node<Shape> node = findCountours(name, working);
 
         Mat drawTo = working;
@@ -85,8 +92,8 @@ public class DominoCounter {
     }
     private void grayscale1(String name, Mat image){
         Imgproc.cvtColor(image, image, Imgproc.COLOR_RGB2GRAY);
-        //Imgproc.adaptiveThreshold(image, image, 255, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 7, 15);
-        Imgproc.threshold(image, image, 0, 255, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU);
+        Imgproc.adaptiveThreshold(image, image, 255, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 7, 3);
+        //Imgproc.threshold(image, image, 0, 255, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU);
 
         saveImage(name, image, "gray");
     }
@@ -99,7 +106,7 @@ public class DominoCounter {
                 //color c = Y < 128 ? black : white
                 double lume = 0.2126*ps[2] + 0.7152*ps[1] + 0.0722*ps[0];
                 double average = (ps[0] + ps[1] + ps[2]) / 3 ;
-                if(average < 240) {
+                if(average < 220) {
                     image.put(a, b, BLACK_A);
                 }else{
                     image.put(a, b, WHITE_A);
@@ -139,7 +146,8 @@ public class DominoCounter {
         Mat hierarchy = new Mat();
         List<MatOfPoint> points = new ArrayList<>();
 
-        Imgproc.Canny(gray, edge, 84, 255, 7);
+        //Imgproc.Canny(gray, edge, 84, 255, 7);
+        Imgproc.Canny(gray, edge, 10,100);
         saveImage(name, edge, "canny");
 
         Imgproc.findContours(edge, points, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
@@ -156,16 +164,7 @@ public class DominoCounter {
     }
 
     private void draw(Node<Shape> n, Mat drawTo){
-        Shape s = n.getData();
-
-        if(!s.isImportant()) return;
-
-        if (s.isCircle()) {
-            Imgproc.drawContours(drawTo, Arrays.asList(s.getContour()), 0, GREEN, 2);
-        } else {
-            Imgproc.drawContours(drawTo, Arrays.asList(s.getContour()), 0, RED, 2);
-        }
-        n.getChildren().stream().forEach(c -> draw(c, drawTo));
+        n.visit(s -> s.draw(drawTo));
     }
 
     private Mat resize(String name, Mat image, double width){

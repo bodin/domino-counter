@@ -20,6 +20,11 @@ public class Node<T> {
         this.data = data;
     }
 
+    public void visit(Visitor<T> v){
+        v.visit(this.data);
+        this.children.values().stream().forEach(c -> c.visit(v));
+    }
+
     public Collection<Node<T>> getChildren() {
         return children.values();
     }
